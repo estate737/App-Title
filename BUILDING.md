@@ -1,4 +1,4 @@
-# Build App Title 0.2.8
+# Build App Title 0.2.9
 
 Requires Linux/POSIX, LLVM/Clang 18, LLD 18, make, Python 3 and PS5 Payload SDK **v0.41**.
 
@@ -13,7 +13,7 @@ export PS5_PAYLOAD_SDK=/absolute/path/ps5-payload-sdk
 make -j4
 ```
 
-The only file needed on the console is `dist/App_Title_v0.2.8.elf`.
+The only file needed on the console is `dist/App_Title_v0.2.9.elf`.
 The shared object in `build/` is automatically embedded into the controller.
 No Actions job or external repository mutation is needed to build.
 
@@ -64,6 +64,21 @@ python3 tools/verify_v027_layout.py --home-ui /absolute/path/HomeUI_decrypted.bi
 node tests/test_outside_layout.js
 ```
 
+For the exact 4.03 JavaScript RAM bundle fixture:
+
+```bash
+make ram-style-test RAM_UI=/absolute/path/4.03/HomeUI_decrypted.bin
+./build-host/test_shellui /absolute/path/4.03/HomeUI_decrypted.bin
+node tools/verify_ram_bundle.js /absolute/path/4.03/HomeUI_decrypted.bin
+```
+
+The RAM test produces twelve local outputs covering inside/outside, top/bottom
+and white/custom/black text. The verification script parses every module and
+executes the actual patched style, geometry and Tile modules with mocked
+native components. It also checks the title-ID visibility gate, both telemetry
+branches, unchanged launch modules and positive label bounds with Yoga.
+The source fixture and generated system modules must stay outside releases.
+
 The fixture test writes eight HBC files: outside modes 0–3 and inside modes 4–7,
 covering bottom/top and white/custom colour. Styles, both Tile renderer branches,
 and geometry/animation/row/game-title builders execute in the official Hermes v0.12.0 CLI.
@@ -86,3 +101,4 @@ outside fixture, then compares its complete HBC digest with released 0.2.7.
 This verifies that working ID rendering is unchanged. Game-title VM checks
 verify TITLE_Y and top=214 outside, top=106 inside, unchanged horizontal and
 minimized offsets, and the original 62-point line container.
+

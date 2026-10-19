@@ -3,6 +3,7 @@
 #include <cstring>
 
 namespace app_title {
+HomeStyleResult patch_home_ram(std::uint8_t*,std::size_t,const Config&);
 namespace {
 std::uint32_t read32(const std::uint8_t* p) {
     return static_cast<std::uint32_t>(p[0])|(static_cast<std::uint32_t>(p[1])<<8)|
@@ -208,6 +209,7 @@ HomeStyleResult patch_home_style(void* value,std::size_t size,const Config& conf
     const auto offset=read32(bundle+0x1c),region=read32(bundle+0x20),plain=read32(bundle+0x24),end=read32(bundle+0x28);
     if(offset<64||region<128||plain<128||plain>region||offset>size||region>size-offset||end!=offset+region)return HomeStyleResult::ignored;
     auto* hbc=bundle+offset;
+    if(read32(hbc)==0xfb0bd1e5u)return patch_home_ram(hbc,plain,config);
     constexpr std::uint8_t magic[]={0xc6,0x1f,0xbc,0x03,0xc1,0x03,0x19,0x1f};
     if(std::memcmp(hbc,magic,8))return HomeStyleResult::ignored;
     if(std::memcmp(hbc+12,source_hash,20))
@@ -251,3 +253,4 @@ HomeStyleResult patch_home_style(void* value,std::size_t size,const Config& conf
     return HomeStyleResult::applied;
 }
 }
+

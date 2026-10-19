@@ -5,7 +5,7 @@
 #include <cstdint>
 
 namespace app_title {
-constexpr char kVersion[] = "0.2.8";
+constexpr char kVersion[] = "0.2.9";
 #ifdef APP_TITLE_HOST_TEST
 constexpr char kDirectory[] = "./build-host/AppTitle";
 constexpr char kConfig[] = "./build-host/config.ini";
@@ -93,3 +93,4 @@ void publish_status(const Stats& stats);
 bool install_hooks(int pid, const Request& request, unsigned& installed);
 int find_shellui();
 }
+

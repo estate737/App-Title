@@ -24,7 +24,7 @@ def check(path,shared):
     assert 'libc.so.6' not in dynamic and 'GLIBC_' not in data.decode('latin1')
     if shared:assert '(PIE)' not in dynamic
     return data
-controller_path=ROOT/'dist/App_Title_v0.2.8.elf'
+controller_path=ROOT/'dist/App_Title_v0.2.9.elf'
 controller=check(controller_path,False)
 shared=check(ROOT/'build/App_Title_ShellUI.elf',True)
 def needed(path):
@@ -56,3 +56,4 @@ addresses={line.split()[-1]:int(line.split()[0],16) for line in symbols.splitlin
 assert 0<addresses['apptitle_stable_stager_end']-addresses['apptitle_stable_stager']<1024
 assert 'stbi_load' not in symbols,'PNG renderer linked into native controller'
 print('PASS: minimal controller dependencies, RegMgr/Mono confined to shared object, native IDs, bounded HomeUI style module and exact embedding')
+
