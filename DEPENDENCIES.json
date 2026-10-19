@@ -1,0 +1,73 @@
+{
+  "ps5_payload_sdk": {
+    "version": "v0.41",
+    "url": "https://github.com/ps5-payload-dev/sdk/releases/tag/v0.41"
+  },
+  "compiler": "Clang/LLD 18.1.3",
+  "common_fps_loader": {
+    "repository": "porhe911/Common-FPS-for-PS5",
+    "commit": "15018e794cfd3f6d793de5c5d51e701a80e8289a"
+  },
+  "shsrv": {
+    "repository": "ps5-payload-dev/shsrv",
+    "tag": "v0.20",
+    "commit": "6f320637d56d344a0e7797753099e33238bbf146"
+  },
+  "media_registration_reference": {
+    "repository": "drakmor/ShadowMountPlus",
+    "commit": "98c524890176c7b474fcb03387bec88c4a559861"
+  },
+  "hde_source": {
+    "repository": "etaHEN/etaHEN",
+    "commit": "dafa13b562ddb137a4b4a97b9aaa287c0c57cc9c"
+  },
+  "stb_source": {
+    "repository": "MasterPS0/PS5-app_title",
+    "commit": "4cbd5a783bec46d7d8bb7f0eb5621a8bd32667ec"
+  },
+  "host_dom_test": {
+    "package": "jsdom",
+    "version": "26.1.0"
+  },
+  "native_titleid_reference": {
+    "repository": "etaHEN/etaHEN",
+    "commit": "dafa13b562ddb137a4b4a97b9aaa287c0c57cc9c",
+    "key": "0x7802c916",
+    "refresh": "ReactNative.Vsh.Common.ReactApplicationSceneManager.ReloadApp(NPXS40002)",
+    "verified_input_sha256": "4845cac45095361b8983b14d6690622183b0dcfbf6d7fda16e161aa91ff0531e"
+  },
+  "rnps_diagnostic_abi": {
+    "repository": "zecoxao/decrypt_rnps",
+    "commit": "5ad3e75156476464e6ff00b12db54c93566a99dd",
+    "interface": "/dev/rnps ioctl 0xc0105203, 16-byte argument",
+    "note": "ABI values only; independently written implementation. Runs only after explicit settings action."
+  },
+  "native_home_style": {
+    "ioctl_hook_reference": "etaHEN/etaHEN dafa13b562ddb137a4b4a97b9aaa287c0c57cc9c Source Code/shellui/src/HookFunctions.cpp",
+    "hermes_format": "facebook/hermes v0.12.0, HBC v89",
+    "reference_disassembler": "P1sec/hermes-dec (external analysis tool; no code linked or bundled)",
+    "home_application": "rnps-home 11.1.0+21887 / PS5 11.20 HOMEUI",
+    "observed_firmware": "11.60",
+    "input_sha256": "fe624ff82e3bbea353f4f7e48f15d428547a95324c989f19f5a93b8c55d28f31",
+    "source_hash": "f321f83f9143035f5d97ee5ad98ceb75133c890e",
+    "bytecode_sha1": "3dacc31c204c037cb7922f3bf863cf962b23497e",
+    "scope": "in-memory, exact verified profile only; no Sony bytecode redistributed",
+    "placement": "Positive-bounds outside labels: 106x202 card, 106x106 bitmap at marginTop=48, native title top=214; selectable inside mode reproduces v0.2.3",
+    "tile_function_sha1": "05ed401101d86998dc48b949c5b2971ebfe92fc5",
+    "patched_functions": [
+      1461,
+      6665,
+      6513,
+      6509,
+      282,
+      6448,
+      1079
+    ]
+  },
+  "host_layout_test": {
+    "package": "yoga-layout",
+    "version": "2.0.1",
+    "repository": "facebook/yoga",
+    "scope": "external host layout check; not linked into payload"
+  }
+}

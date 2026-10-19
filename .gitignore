@@ -1,0 +1,14 @@
+build/
+build-host/
+build-ui/
+dist/
+node_modules/
+__pycache__/
+*.pyc
+*.o
+*.d
+*.log
+HomeUI_decrypted.bin
+*.hbc
+config.ini
+.DS_Store

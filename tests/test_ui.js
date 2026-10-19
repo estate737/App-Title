@@ -1,0 +1,53 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+const assert=require('assert');const {JSDOM}=require('../build-ui/node_modules/jsdom');
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+(async()=>{
+ const dom=await JSDOM.fromURL('http://127.0.0.1:39031/',{runScripts:'dangerously',resources:'usable',pretendToBeVisual:true});
+ const w=dom.window,d=w.document,errors=[];w.addEventListener('error',e=>errors.push(e.message));
+ try {
+  await wait(350);
+  assert(d.getElementById('status').textContent.includes('Запросов ID: 7'));
+  assert(!d.getElementById('style-controls').hidden);assert.notEqual(w.getComputedStyle(d.getElementById('style-controls')).display,'none');
+  assert(!d.querySelector('[data-pos="top"]').disabled&&!d.getElementById('hex').disabled);
+  assert.equal(d.querySelectorAll('[data-color]').length,8);assert([...d.querySelectorAll('[data-color]')].every(b=>!b.disabled));
+  assert.equal(d.getElementById('hex').value,'65D6FF');assert.equal(d.getElementById('sample').style.bottom,'100%');
+  d.querySelector('[data-pos="bottom"]').click();d.querySelector('[data-color="ff7777"]').focus();
+  d.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Cross',bubbles:true,cancelable:true}));
+  assert.equal(d.getElementById('sample').style.bottom,'auto');assert.equal(d.getElementById('sample').style.top,'100%');assert.equal(d.getElementById('sample').style.marginTop,'8px');
+  assert(!d.querySelector('.preview').contains(d.getElementById('sample')));
+  assert.equal(d.querySelector('[data-pos="top"]').textContent,'Над иконкой');assert.equal(d.querySelector('[data-pos="bottom"]').textContent,'Под иконкой');
+  assert.equal(d.getElementById('sample').style.color,'rgb(255, 119, 119)');
+  const hex=d.getElementById('hex');hex.value='12abef';hex.dispatchEvent(new w.Event('input',{bubbles:true}));
+  assert.equal(d.getElementById('sample').style.color,'rgb(18, 171, 239)');
+  d.querySelector('[data-placement="inside"]').click();
+  assert.equal(d.getElementById('sample').style.bottom,'0px');assert.equal(d.getElementById('sample').style.top,'auto');
+  assert.equal(d.querySelector('[data-pos="bottom"]').textContent,'Снизу внутри');
+  d.querySelector('[data-on="0"]').click();d.getElementById('save').focus();
+  d.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Cross',bubbles:true,cancelable:true}));await wait(250);
+  let state=await(await fetch('http://127.0.0.1:39031/api/state')).json();
+  assert.equal(state.enabled,0);assert.equal(state.placement,'inside');assert.equal(state.position,'bottom');assert.equal(state.color,'12abef');
+  d.querySelector('[data-on="1"]').click();
+  const buttons=Array.from({length:16},()=>({pressed:false,value:0}));
+  Object.defineProperty(w.navigator,'getGamepads',{value:()=>[{buttons}],configurable:true});
+  buttons[9]={pressed:true,value:1};await wait(200);buttons[9]={pressed:false,value:0};
+  state=await(await fetch('http://127.0.0.1:39031/api/state')).json();assert.equal(state.enabled,1);
+  hex.value='bad';d.getElementById('save').click();await wait(100);
+  assert(d.getElementById('result').textContent.includes('шесть символов HEX'));
+  state=await(await fetch('http://127.0.0.1:39031/api/state')).json();assert.equal(state.color,'12abef');
+  d.getElementById('defaults').click();d.getElementById('save').click();await wait(150);
+  state=await(await fetch('http://127.0.0.1:39031/api/state')).json();assert.equal(state.position,'bottom');assert.equal(state.color,'ffffff');assert.equal(state.placement,'outside');
+  d.querySelector('[data-on="0"]').click();d.getElementById('save').click();await wait(150);
+  const first=d.querySelector('[data-on="1"]');first.focus();
+  d.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));
+  assert.equal(d.activeElement.getAttribute('data-on'),'0');
+  d.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));assert.equal(d.activeElement.getAttribute('data-placement'),'outside');
+  d.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));assert.equal(d.activeElement.getAttribute('data-placement'),'inside');
+  d.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));assert.equal(d.activeElement.getAttribute('data-pos'),'top');
+  d.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));assert.equal(d.activeElement.getAttribute('data-pos'),'bottom');
+  d.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));assert.equal(d.activeElement.getAttribute('data-color'),'ffffff');
+  d.getElementById('export').click();await wait(200);
+  state=await(await fetch('http://127.0.0.1:39031/api/state')).json();
+  assert.equal(state.export_state,'queued');assert(d.getElementById('export').disabled);
+  assert.deepEqual(errors,[]);console.log('PASS: visible palette/position/custom HEX, live preview, Cross/OPTIONS save, D-pad navigation, invalid HEX refusal and white/bottom reset');
+ } finally {w.close();}
+})().catch(e=>{console.error(e);process.exitCode=1;});
