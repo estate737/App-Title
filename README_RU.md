@@ -4,6 +4,12 @@
 
 [Скачать 0.2.8](https://github.com/porhe911/App-Title/releases/tag/v0.2.8) · [English](README.md) · [Сборка](BUILDING.md)
 
+## Пример
+
+![App Title: белые ID игр и приложений под иконками на домашнем экране PS5](docs/images/app-title-preview.jpg)
+
+ID отображаются под иконками, за пределами изображения. По умолчанию выбран белый цвет.
+
 ## Возможности
 
 - ID вида CUSA00001 и PPSA03846 над изображением или под ним.

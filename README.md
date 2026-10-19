@@ -4,6 +4,12 @@ Standalone PS5 ELF payload that displays game and application title IDs on the h
 
 [Download v0.2.8](https://github.com/porhe911/App-Title/releases/tag/v0.2.8) · [Русский README](README_RU.md) · [Build instructions](BUILDING.md)
 
+## Preview
+
+![App Title showing white title IDs below PS5 game and application icons](docs/images/app-title-preview.jpg)
+
+Title IDs appear below the icons, outside the artwork, with white text by default.
+
 ## Features
 
 - Title IDs such as `CUSA00001` and `PPSA03846`.
