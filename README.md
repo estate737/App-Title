@@ -1,8 +1,8 @@
-# App_Title
+# App Title
 
 Standalone PS5 ELF payload that displays game and application title IDs on the home screen, with a persistent settings shortcut in **Media**.
 
-[Download v0.2.8](https://github.com/porhe911/App_Title/releases/tag/v0.2.8) · [Русский README](README_RU.md) · [Build instructions](BUILDING.md)
+[Download v0.2.8](https://github.com/porhe911/App-Title/releases/tag/v0.2.8) · [Русский README](README_RU.md) · [Build instructions](BUILDING.md)
 
 ## Features
 
@@ -24,7 +24,7 @@ Requires a working jailbreak and a compatible privileged ELF loader. The payload
 
 ## Installation
 
-1. Download `App_Title_v0.2.8.elf` from [Releases](https://github.com/porhe911/App_Title/releases).
+1. Download `App_Title_v0.2.8.elf` from [Releases](https://github.com/porhe911/App-Title/releases).
 2. Remove the previous App Title entry from autoload, or replace its file with the new ELF.
 3. Fully reboot the console to clear any previous resident version.
 4. Run your jailbreak, then load the ELF once or add it to your loader's autoload list.

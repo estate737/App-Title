@@ -1,4 +1,4 @@
-# Validation: App_Title 0.2.8
+# Validation: App Title 0.2.8
 
 Firmware 11.60 / rnps-home 11.1.0+21887 / PS5 11.20 HOMEUI / Hermes v89.
 The user confirmed the outside-ID layout and requested publication after the
