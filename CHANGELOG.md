@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.10 — resource-lifecycle test build
+
+- Detach the owned native ShellUI worker from Mono after metadata/JIT bootstrap, including every failure path. Managed home refreshes remain on the existing UI thread.
+- Close each successfully initialized AppInstUtil session before restoring the installer identity, then close the owned UserService session. Do not terminate sessions whose initialization failed or reported already initialized.
+- Resolve matching cleanup exports before initialization; missing cleanup support does not open a new session. Stop startup if explicit service cleanup or identity restoration fails.
+- Preserve the original callback's errno across style processing and managed home refreshes.
+- Retain 4.03 and 11.60 layout profiles, saved settings, Media shortcut and bounded logs.
+
+This addresses resource-lifecycle issues identified during investigation. It is not a confirmed fix for the reported delayed game-launch or FTP failures; no console soak test is claimed.
+
 ## 0.2.9 — 4.03 test build
 
 - Add the exact 4.03 HomeUI JavaScript Indexed RAM bundle profile alongside the existing 11.60 Hermes profile.

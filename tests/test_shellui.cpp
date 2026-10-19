@@ -14,44 +14,49 @@ MonoDomain domain;MonoThread thread;MonoAssembly react_assembly{1},pui_assembly{
 MonoClass manager_class{1},application_class{2};MonoMethod reload_info{1},update_info{2};MonoObject exception_value;
 MonoString home_name;bool pinned=false,on_ui_thread=false,raise_exception=false,reenter=false;
 int fail_stage=0;unsigned original_queries=0,original_updates=0,invocations=0;
+bool worker_attached=false;
+unsigned attaches=0,detaches=0;
 bool bad_reload_signature=false,bad_update_signature=false,byref_signature=false;
 MonoMethodSignature reload_signature{1},update_signature{2};MonoType void_type{1},string_type{0x0e},int_type{0x08};
 std::vector<std::string> events;
 int original_registry(long,int* out){++original_queries;if(out)*out=42;return -77;}
-void original_update(MonoObject*){assert(on_ui_thread);++original_updates;events.emplace_back("original");}
+void original_update(MonoObject*){assert(on_ui_thread);++original_updates;events.emplace_back("original");errno=EALREADY;}
 void compiled_update(MonoObject*){}
-void frame(){on_ui_thread=true;run_update(nullptr,original_update);on_ui_thread=false;}
+void frame(){assert(!worker_attached);on_ui_thread=true;run_update(nullptr,original_update);assert(errno==EALREADY);on_ui_thread=false;}
 }
 extern "C" {
 int sceRegMgrGetInt(long key,int* out){return original_registry(key,out);}
 MonoDomain* mono_get_root_domain(){return fail_stage==100?nullptr:&domain;}
-MonoThread* mono_thread_attach(MonoDomain* p){assert(p==&domain);return fail_stage==101?nullptr:&thread;}
+MonoThread* mono_thread_attach(MonoDomain* p){assert(p==&domain&&!worker_attached);if(fail_stage==101)return nullptr;worker_attached=true;++attaches;return &thread;}
+void mono_thread_detach(MonoThread* t){assert(t==&thread&&worker_attached&&!on_ui_thread);worker_attached=false;++detaches;}
 MonoAssembly* mono_domain_assembly_open(MonoDomain* p,const char* path) {
-    assert(p==&domain);
+    assert(p==&domain&&worker_attached);
     if(!std::strcmp(path,"/system_ex/common_ex/lib/ReactNative.Vsh.Common.dll"))return fail_stage==102?nullptr:&react_assembly;
     assert(!std::strcmp(path,"/system_ex/common_ex/lib/Sce.PlayStation.PUI.dll"));return fail_stage==104?nullptr:&pui_assembly;
 }
-MonoImage* mono_assembly_get_image(MonoAssembly* a){return a->kind==1?&react_image:&pui_image;}
+MonoImage* mono_assembly_get_image(MonoAssembly* a){assert(worker_attached);return a->kind==1?&react_image:&pui_image;}
 MonoClass* mono_class_from_name(MonoImage* img,const char* ns,const char* name) {
+    assert(worker_attached);
     if(img==&react_image){assert(!std::strcmp(ns,"ReactNative.Vsh.Common")&&!std::strcmp(name,"ReactApplicationSceneManager"));return &manager_class;}
     assert(img==&pui_image&&!std::strcmp(ns,"Sce.PlayStation.PUI")&&!std::strcmp(name,"Application"));return &application_class;
 }
 MonoMethod* mono_class_get_method_from_name(MonoClass* c,const char* name,int count) {
+    assert(worker_attached);
     if(c==&manager_class){assert(!std::strcmp(name,"ReloadApp")&&count==1);return fail_stage==103?nullptr:&reload_info;}
     assert(c==&application_class&&!std::strcmp(name,"Update")&&count==0);return fail_stage==105?nullptr:&update_info;
 }
-std::uint32_t mono_method_get_flags(MonoMethod* m,std::uint32_t* impl){*impl=0;return m==&reload_info?0x10:0;}
-MonoMethodSignature* mono_method_signature(MonoMethod* m){return m==&reload_info?&reload_signature:&update_signature;}
+std::uint32_t mono_method_get_flags(MonoMethod* m,std::uint32_t* impl){assert(worker_attached);*impl=0;return m==&reload_info?0x10:0;}
+MonoMethodSignature* mono_method_signature(MonoMethod* m){assert(worker_attached);return m==&reload_info?&reload_signature:&update_signature;}
 unsigned mono_signature_get_param_count(MonoMethodSignature* s){return s->kind==1?1:0;}
 MonoType* mono_signature_get_return_type(MonoMethodSignature* s){return s->kind==2&&bad_update_signature?&int_type:&void_type;}
 MonoType* mono_signature_get_params(MonoMethodSignature* s,void**){assert(s==&reload_signature);return bad_reload_signature?&int_type:&string_type;}
 int mono_type_get_type(MonoType* t){return t->kind;}
 int mono_type_is_byref(MonoType* t){return t==&string_type&&byref_signature?1:0;}
-void* mono_compile_method(MonoMethod* m){assert(m==&update_info);return fail_stage==106?nullptr:reinterpret_cast<void*>(&compiled_update);}
+void* mono_compile_method(MonoMethod* m){assert(worker_attached&&m==&update_info);return fail_stage==106?nullptr:reinterpret_cast<void*>(&compiled_update);}
 MonoString* mono_string_new(MonoDomain* d,const char* text){assert(on_ui_thread&&d==&domain);home_name.text=text;return &home_name;}
 std::uint32_t mono_gchandle_new(MonoObject* obj,int pin){assert(obj==reinterpret_cast<MonoObject*>(&home_name)&&pin==1&&!pinned);pinned=true;return 1;}
 MonoObject* mono_gchandle_get_target(std::uint32_t id){assert(pinned&&id==1);return reinterpret_cast<MonoObject*>(&home_name);}
-void mono_gchandle_free(std::uint32_t id){assert(pinned&&id==1);pinned=false;}
+void mono_gchandle_free(std::uint32_t id){assert(pinned&&id==1);pinned=false;errno=ENOMEM;}
 MonoObject* mono_runtime_invoke(MonoMethod* m,void* instance,void** args,MonoObject** error) {
     assert(on_ui_thread&&m==&reload_info&&!instance&&pinned&&args[0]==&home_name&&home_name.text=="NPXS40002");
     ++invocations;events.emplace_back("reload");
@@ -65,14 +70,17 @@ int main(int argc,char** argv) {
     using namespace app_title;namespace fs=std::filesystem;
     for(int value:{100,101,102,103,104,105,106}) {
         fail_stage=value;Request r{};assert(!prepare_request(r)&&stage.load()==static_cast<unsigned>(value)&&r.count==0);
+        assert(!worker_attached&&attaches==detaches);
     }
     fail_stage=0;
     for(unsigned mode=0;mode<3;++mode) {
         bad_reload_signature=mode==0;bad_update_signature=mode==1;byref_signature=mode==2;
         Request bad{};assert(!prepare_request(bad)&&bad.count==0);
+        assert(!worker_attached&&attaches==detaches);
     }
     bad_reload_signature=bad_update_signature=byref_signature=false;
     Request request{};assert(prepare_request(request)&&request.count==kHooks&&stage.load()==5);
+    assert(!worker_attached&&attaches==detaches&&attaches==9);
     assert(request.hooks[0].target==reinterpret_cast<std::uintptr_t>(&sceRegMgrGetInt));
     assert(request.hooks[1].target==reinterpret_cast<std::uintptr_t>(&compiled_update));
     assert(request.hooks[2].target==reinterpret_cast<std::uintptr_t>(&ioctl));
@@ -97,8 +105,9 @@ int main(int argc,char** argv) {
     config.outside=false;activation(true,config,kHooks);assert(reload_pending.load());frame();assert(invocations==5&&style_config.load()==0x112abef);
     for(unsigned i=0;i<1000;++i){activation(true,config,kHooks);frame();}assert(invocations==5);
     config.outside=true;activation(true,config,kHooks);frame();assert(invocations==6&&style_config.load()==0x312abef);
-    unsigned ioctl_calls=0;auto passthrough=[](int,unsigned long,void*){return -19;};
+    unsigned ioctl_calls=0;auto passthrough=[](int,unsigned long,void*){errno=EBADF;return -19;};
     assert(ioctl_get(10,0xc0105203,reinterpret_cast<void*>(1),passthrough)==-19);
+    assert(errno==EBADF);
     assert(ioctl_get(10,0xc0105202,reinterpret_cast<void*>(1),[](int,unsigned long,void*){return 0;})==0);
     assert(ioctl_get(10,0xc0105203,nullptr,[](int,unsigned long,void*){return 0;})==0);
     if(argc>1) {
@@ -126,5 +135,5 @@ int main(int argc,char** argv) {
     std::ifstream file("build-host/native/status.bin",std::ios::binary);RuntimeStatus loaded{};file.read(reinterpret_cast<char*>(&loaded),sizeof(loaded));assert(loaded.overrides==state.overrides);
     assert(fs::last_write_time("build-host/native/diagnostic.log")==text_stamp);
     fs::remove("build-host/native/status.bin");fs::remove("build-host/native/diagnostic.log");fs::remove("build-host/native");
-    puts("PASS: exact etaHEN key override, all other registry calls preserved, Mono bootstrap checks, UI-thread home reload, GC pinning, reentry/exception guards colour/position reloads, post-decrypt style routing and no periodic logs");
+    puts("PASS: balanced Mono attachment on all bootstrap paths, native worker detached, UI-thread reloads and errno preserved, exact registry key, GC pinning, reentry/exception guards, colour/position changes, style routing and bounded logging");
 }

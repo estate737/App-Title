@@ -2,7 +2,7 @@
 
 Standalone PS5 ELF payload that displays game and application title IDs on the home screen, with a persistent settings shortcut in **Media**.
 
-**0.2.9 test build:** adds the exact JavaScript RAM bundle profile supplied from firmware **4.03**. It has passed local fixture, JavaScript execution and layout checks; visual testing on a 4.03 console is still required.
+**0.2.10 test build:** detaches the native worker from Mono after bootstrap and closes AppInstUtil/UserService sessions after Media registration. These changes reduce resource retention; the reported delayed game-launch and FTP failures are not yet confirmed fixed. The **4.03** RAM bundle profile from 0.2.9 is retained; console testing is still required.
 
 [Download v0.2.8](https://github.com/porhe911/App-Title/releases/tag/v0.2.8) · [Русский README](README_RU.md) · [Build instructions](BUILDING.md)
 
@@ -39,7 +39,7 @@ Requires a working jailbreak and a compatible privileged ELF loader. The payload
 
 ## Installation
 
-1. Use the supplied `App_Title_v0.2.9.elf` test build for 4.03, or build it from this branch. The [published 0.2.8 release](https://github.com/porhe911/App-Title/releases/tag/v0.2.8) does not support the 4.03 style profile.
+1. Use the supplied `App_Title_v0.2.10.elf` test build for 4.03/11.60, or build it from this branch. The [published 0.2.8 release](https://github.com/porhe911/App-Title/releases/tag/v0.2.8) does not support the 4.03 style profile.
 2. Remove the previous App Title entry from autoload, or replace its file with the new ELF.
 3. Fully reboot the console to clear any previous resident version.
 4. Run your jailbreak, then load the ELF once or add it to your loader's autoload list.

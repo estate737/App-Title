@@ -4,6 +4,7 @@
 #include "app_title.hpp"
 #include "home_style.hpp"
 #include <atomic>
+#include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <unistd.h>
@@ -15,6 +16,7 @@ int sceRegMgrGetInt(long,int*);
 int ioctl(int,unsigned long,...);
 MonoDomain* mono_get_root_domain();
 MonoThread* mono_thread_attach(MonoDomain*);
+void mono_thread_detach(MonoThread*);
 MonoAssembly* mono_domain_assembly_open(MonoDomain*,const char*);
 MonoImage* mono_assembly_get_image(MonoAssembly*);
 MonoClass* mono_class_from_name(MonoImage*,const char*,const char*);
@@ -66,6 +68,7 @@ int registry_get(long key,int* out,Registry original) {
 int registry_hook(long key,int* out){return registry_get(key,out,reinterpret_cast<Registry>(&registry_trampoline));}
 int ioctl_get(int fd,unsigned long command,void* argument,Ioctl original) {
     const int result=original(fd,command,argument);
+    const int original_errno=errno;
     if(result==0&&command==0xc0105203UL&&argument&&enabled.load(std::memory_order_acquire)&&style_hook_ready.load(std::memory_order_acquire)) {
         const auto* args=static_cast<const RnpsArgs*>(argument);
         if(args->error==0&&args->buffer&&args->size>0) {
@@ -79,12 +82,14 @@ int ioctl_get(int fd,unsigned long command,void* argument,Ioctl original) {
             else if(patched==app_title::HomeStyleResult::invalid)style_state.store(app_title::StyleState::invalid,std::memory_order_release);
         }
     }
+    errno=original_errno;
     return result;
 }
 int ioctl_hook(int fd,unsigned long command,void* argument){return ioctl_get(fd,command,argument,reinterpret_cast<Ioctl>(&ioctl_trampoline));}
 void run_update(MonoObject* instance,Update original) {
     original(instance);
     if(!reload_pending.load(std::memory_order_acquire)||reloading.test_and_set(std::memory_order_acquire))return;
+    const int original_errno=errno;
     // Consume before invocation: a scene reload may re-enter an Update callback.
     if(reload_pending.exchange(false,std::memory_order_acq_rel)) {
         MonoString* name=root_domain?mono_string_new(root_domain,"NPXS40002"):nullptr;
@@ -101,6 +106,7 @@ void run_update(MonoObject* instance,Update original) {
         if(handle)mono_gchandle_free(handle);
     }
     reloading.clear(std::memory_order_release);
+    errno=original_errno;
 }
 void update_hook(MonoObject* instance){run_update(instance,reinterpret_cast<Update>(&update_trampoline));}
 void activation(bool valid,const app_title::Config& config,unsigned hooks) {
@@ -132,7 +138,14 @@ bool signature(MonoMethod* method,bool takes_string) {
 bool prepare_request(app_title::Request& r) {
     root_domain=mono_get_root_domain();
     if(!root_domain){stage.store(100);return false;}
-    if(!mono_thread_attach(root_domain)){stage.store(101);return false;}
+    // This is our own native pthread, not an existing managed UI thread.
+    // Metadata/JIT preparation is its only Mono work. Do not leave this
+    // polling/sleeping thread registered with the GC for the entire session.
+    struct Attachment {
+        MonoThread* thread;
+        ~Attachment(){if(thread)mono_thread_detach(thread);}
+    } attachment{mono_thread_attach(root_domain)};
+    if(!attachment.thread){stage.store(101);return false;}
     auto* react=image("/system_ex/common_ex/lib/ReactNative.Vsh.Common.dll");
     if(!react){stage.store(102);return false;}
     auto* manager=mono_class_from_name(react,"ReactNative.Vsh.Common","ReactApplicationSceneManager");
@@ -190,7 +203,9 @@ extern "C" __attribute__((noreturn,visibility("default"))) void* elf_main(void*)
     app_title::Request request{};const bool ready=prepare_request(request);
     if(ready&&!app_title::atomic_file(app_title::kRequest,&request,sizeof(request)))stage.store(107);
     publisher.update(snapshot());
-    // The injected thread remains resident even if bootstrap was refused.
+    // Bootstrap detaches from Mono on success and on every failure path.
+    // Only this native file/status worker remains; managed operations run
+    // exclusively in the already-managed Application.Update callback.
     for(;;) {
         int pid=0,on=0,top=0;unsigned color=0xffffff,hooks=0;char extra=0;bool valid=false;
         if(ready)if(FILE* f=fopen(app_title::kActive,"r")) {

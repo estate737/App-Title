@@ -1,4 +1,4 @@
-# Build App Title 0.2.9
+# Build App Title 0.2.10
 
 Requires Linux/POSIX, LLVM/Clang 18, LLD 18, make, Python 3 and PS5 Payload SDK **v0.41**.
 
@@ -13,7 +13,7 @@ export PS5_PAYLOAD_SDK=/absolute/path/ps5-payload-sdk
 make -j4
 ```
 
-The only file needed on the console is `dist/App_Title_v0.2.9.elf`.
+The only file needed on the console is `dist/App_Title_v0.2.10.elf`.
 The shared object in `build/` is automatically embedded into the controller.
 No Actions job or external repository mutation is needed to build.
 
@@ -49,6 +49,15 @@ internal shared object as a second standalone payload.
 Only the shared component links to the SDK stubs for libSceRegMgr and libmonosgen-2.0. The controller resolves their exports in the existing ShellUI process. Registry and Application.Update callbacks are required. An additional ioctl callback styles the verified HomeUI after successful RNPS decryption; unsupported style prologues preserve the required pair.
 
 The controller must not have libSceRegMgr or libmonosgen in DT_NEEDED. The SDK processes this list before main. Run tools/verify_elf.py after linking; its dependency allowlist is a startup regression check.
+
+The injected native worker attaches to Mono only for metadata/JIT bootstrap and
+detaches before entering its file/status loop, including on bootstrap failure.
+Managed refreshes execute on the already-managed Application.Update thread.
+Media registration closes each successfully initialized AppInstUtil session
+before restoring its auth ID, then closes its owned UserService session.
+Failed/already-initialized sessions are never terminated by App Title.
+The Media test exercises cleanup ordering, missing exports and failure paths;
+the ShellUI test checks balanced Mono attachment and original errno preservation.
 
 Optional fixture and real Hermes VM checks (Sony input and Hermes tools are external):
 

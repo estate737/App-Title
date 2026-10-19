@@ -24,7 +24,7 @@ def check(path,shared):
     assert 'libc.so.6' not in dynamic and 'GLIBC_' not in data.decode('latin1')
     if shared:assert '(PIE)' not in dynamic
     return data
-controller_path=ROOT/'dist/App_Title_v0.2.9.elf'
+controller_path=ROOT/'dist/App_Title_v0.2.10.elf'
 controller=check(controller_path,False)
 shared=check(ROOT/'build/App_Title_ShellUI.elf',True)
 def needed(path):
@@ -49,6 +49,8 @@ assert 'ioctl_trampoline' in shared_symbols and 'patch_home_style' in shared_sym
 assert 'sha1_digest' in shared_symbols and 'build_title_style' in shared_symbols
 assert 'open_trampoline' not in shared_symbols and 'stat_trampoline' not in shared_symbols
 assert 'sceRegMgrGetInt' in shared_symbols and 'mono_runtime_invoke' in shared_symbols
+assert 'mono_thread_attach' in shared_symbols and 'mono_thread_detach' in shared_symbols
+assert b'sceAppInstUtilTerminate' in controller and b'sceUserServiceTerminate' in controller
 assert bytes.fromhex('16c90278') in shared,'etaHEN title ID key missing'
 assert b'NPXS40002' in shared and b'ReloadApp' in shared
 symbols=subprocess.check_output(['objdump','-t',str(controller_path)],text=True)
