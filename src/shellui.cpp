@@ -3,7 +3,9 @@
 // GPL-3.0-or-later reference: etaHEN / LightningMods, 2025.
 #include "app_title.hpp"
 #include "home_style.hpp"
+#include "app_title_override_bridge.hpp"
 #include <atomic>
+#include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <unistd.h>
@@ -15,6 +17,7 @@ int sceRegMgrGetInt(long,int*);
 int ioctl(int,unsigned long,...);
 MonoDomain* mono_get_root_domain();
 MonoThread* mono_thread_attach(MonoDomain*);
+void mono_thread_detach(MonoThread*);
 MonoAssembly* mono_domain_assembly_open(MonoDomain*,const char*);
 MonoImage* mono_assembly_get_image(MonoAssembly*);
 MonoClass* mono_class_from_name(MonoImage*,const char*,const char*);
@@ -42,6 +45,8 @@ std::atomic<std::uint32_t> style_config{0xffffff},applied_config{0xffffff};
 std::atomic<app_title::StyleState> style_state{app_title::StyleState::idle};
 std::atomic_bool style_hook_ready{false};
 std::atomic<unsigned long long> style_patches{0};
+std::atomic<app_title_override::Transform> override_transform{nullptr};
+static_assert(decltype(override_transform)::is_always_lock_free,"Callback publication must not lock");
 MonoDomain* root_domain=nullptr;MonoMethod* reload_method=nullptr;
 #define TRAMP(name) extern "C" __attribute__((naked,noinline,used,aligned(16))) void name(){__asm__ volatile(".rept 256\n nop\n .endr\n ret\n");}
 TRAMP(registry_trampoline)
@@ -66,6 +71,9 @@ int registry_get(long key,int* out,Registry original) {
 int registry_hook(long key,int* out){return registry_get(key,out,reinterpret_cast<Registry>(&registry_trampoline));}
 int ioctl_get(int fd,unsigned long command,void* argument,Ioctl original) {
     const int result=original(fd,command,argument);
+    const int original_errno=errno;
+    if(const auto transform=override_transform.load(std::memory_order_acquire))
+        transform(fd,command,argument,result);
     if(result==0&&command==0xc0105203UL&&argument&&enabled.load(std::memory_order_acquire)&&style_hook_ready.load(std::memory_order_acquire)) {
         const auto* args=static_cast<const RnpsArgs*>(argument);
         if(args->error==0&&args->buffer&&args->size>0) {
@@ -79,12 +87,28 @@ int ioctl_get(int fd,unsigned long command,void* argument,Ioctl original) {
             else if(patched==app_title::HomeStyleResult::invalid)style_state.store(app_title::StyleState::invalid,std::memory_order_release);
         }
     }
-    return result;
+    errno=original_errno;return result;
 }
 int ioctl_hook(int fd,unsigned long command,void* argument){return ioctl_get(fd,command,argument,reinterpret_cast<Ioctl>(&ioctl_trampoline));}
+int register_override(std::uint32_t abi,int pid,app_title_override::Transform transform,bool refresh) {
+    const auto address=reinterpret_cast<std::uintptr_t>(transform);
+    if(abi!=app_title_override::kAbi||pid!=getpid()||address<0x10000||address>=0x800000000000ULL)return -1;
+    auto expected=static_cast<app_title_override::Transform>(nullptr);
+    if(!override_transform.compare_exchange_strong(expected,transform,std::memory_order_acq_rel)&&expected!=transform)return -1;
+    if(refresh)reload_pending.store(true,std::memory_order_release);
+    return 0;
+}
+bool publish_override_bridge() {
+    app_title_override::Record record{};record.pid=getpid();
+    record.registrar=reinterpret_cast<std::uintptr_t>(&register_override);
+    record.target=reinterpret_cast<std::uintptr_t>(&ioctl);
+    record.replacement=reinterpret_cast<std::uintptr_t>(&ioctl_hook);
+    return app_title::atomic_file(app_title_override::kPath,&record,sizeof(record));
+}
 void run_update(MonoObject* instance,Update original) {
     original(instance);
     if(!reload_pending.load(std::memory_order_acquire)||reloading.test_and_set(std::memory_order_acquire))return;
+    const int original_errno=errno;
     // Consume before invocation: a scene reload may re-enter an Update callback.
     if(reload_pending.exchange(false,std::memory_order_acq_rel)) {
         MonoString* name=root_domain?mono_string_new(root_domain,"NPXS40002"):nullptr;
@@ -101,6 +125,7 @@ void run_update(MonoObject* instance,Update original) {
         if(handle)mono_gchandle_free(handle);
     }
     reloading.clear(std::memory_order_release);
+    errno=original_errno;
 }
 void update_hook(MonoObject* instance){run_update(instance,reinterpret_cast<Update>(&update_trampoline));}
 void activation(bool valid,const app_title::Config& config,unsigned hooks) {
@@ -132,7 +157,13 @@ bool signature(MonoMethod* method,bool takes_string) {
 bool prepare_request(app_title::Request& r) {
     root_domain=mono_get_root_domain();
     if(!root_domain){stage.store(100);return false;}
-    if(!mono_thread_attach(root_domain)){stage.store(101);return false;}
+    // This native worker only needs Mono for metadata/JIT preparation. Do not
+    // keep its sleeping polling loop attached to the managed GC afterwards.
+    struct Attachment {
+        MonoThread* thread;
+        ~Attachment(){if(thread)mono_thread_detach(thread);}
+    } attachment{mono_thread_attach(root_domain)};
+    if(!attachment.thread){stage.store(101);return false;}
     auto* react=image("/system_ex/common_ex/lib/ReactNative.Vsh.Common.dll");
     if(!react){stage.store(102);return false;}
     auto* manager=mono_class_from_name(react,"ReactNative.Vsh.Common","ReactApplicationSceneManager");
@@ -190,7 +221,8 @@ extern "C" __attribute__((noreturn,visibility("default"))) void* elf_main(void*)
     app_title::Request request{};const bool ready=prepare_request(request);
     if(ready&&!app_title::atomic_file(app_title::kRequest,&request,sizeof(request)))stage.store(107);
     publisher.update(snapshot());
-    // The injected thread remains resident even if bootstrap was refused.
+    // Only the native worker remains; the temporary Mono attachment is gone.
+    bool bridge_published=false;
     for(;;) {
         int pid=0,on=0,top=0;unsigned color=0xffffff,hooks=0;char extra=0;bool valid=false;
         if(ready)if(FILE* f=fopen(app_title::kActive,"r")) {
@@ -198,5 +230,6 @@ extern "C" __attribute__((noreturn,visibility("default"))) void* elf_main(void*)
         }
         app_title::Config config{};config.enabled=on==1;config.top=(top&1)!=0;config.outside=(top&2)!=0;config.color=color;
         activation(valid,config,hooks);publisher.update(snapshot());usleep(500000);
+        if(valid&&hooks==app_title::kHooks&&!bridge_published)bridge_published=publish_override_bridge();
     }
 }
